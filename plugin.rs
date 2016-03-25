@@ -1,16 +1,17 @@
 #![allow(unused_mut)]
 
-extern crate dylib;
+extern crate libloading;
 extern crate libc;
 
-use dylib::DynamicLibrary;
+use libloading::os::unix::*;
 use libc::c_void;
 use std::collections::HashMap;
 use std::str;
 use std::slice;
 
 // global access to the function entry point (could become a vector to support multple apps)
-static mut app : Option<extern fn(HashMap<&str, &str>) -> (String, Vec<(String, String)>, Vec<Vec<u8>>)> = None;
+type rust_fn = Symbol<extern fn(HashMap<&str, &str>) -> (String, Vec<(String, String)>, Vec<Vec<u8>>)>;
+static mut app : Option<rust_fn> = None;
 
 // C functions used by Rust
 extern {
@@ -24,11 +25,7 @@ extern {
 // load the function entry point
 #[no_mangle]
 pub extern fn rust_load_fn(name: *mut u8, name_len: u16) -> i32 {
-	let lib = match DynamicLibrary::open(None) {
-                Ok(lib) => lib,
-                Err(e) => { println!("[rust] {}", e); return -1},
-        };
-
+	let lib = Library::this(); 
 	let fn_name_slice = unsafe { slice::from_raw_parts(name, name_len as usize) };
 	let fn_name = match str::from_utf8(fn_name_slice) {
 		Ok(s) => s,
@@ -36,11 +33,11 @@ pub extern fn rust_load_fn(name: *mut u8, name_len: u16) -> i32 {
 	};
 
 	unsafe {
-        	app = match lib.symbol(fn_name) {
-                        Err(e) => { println!("[rust] {}", e); return -1},
-                        Ok(f) => Some(std::mem::transmute::<*mut u8, extern fn(HashMap<&str, &str>) -> (String, Vec<(String, String)>, Vec<Vec<u8>>)>(f)),
+        app = match lib.get(fn_name_slice) {
+                Ok(symbol) => Some(symbol),
+                Err(e) => { println!("[rust] {}", e); return -1 }
                 }
-        };
+    };
 
 	return 0;
 }
@@ -78,13 +75,13 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 			return -1;
 		}
 	}
-
+    println!("{:?}", environ);
 	let entry_point;
 	
 	unsafe {
 		entry_point = match app {
 			None => return -1,
-			Some(f) => f,
+			Some(ref f) => f,
 		};
 	};
 

@@ -16,4 +16,4 @@ path = "plugin.rs"
 
 [dependencies]
 libc = "0.1"
-dylib = "0.0.1"
+libloading = "*"
