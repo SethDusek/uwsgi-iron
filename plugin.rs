@@ -75,13 +75,10 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 			return -1;
 		}
 	}
-    println!("{:?}", environ);
-	let entry_point;
-	
-	unsafe {
-		entry_point = match app {
-			None => return -1,
-			Some(ref f) => f,
+	let entry_point = unsafe {
+		    match app {
+			    None => return -1,
+			    Some(ref f) => f,
 		};
 	};
 
