@@ -1,19 +1,17 @@
 [package]
-
-name = "uwsgi_rust"
-version = "0.0.1-dev"
 authors = ["Unbit s.a.s"]
+description = "uWSGI and Rust integration plugin. \n"
 license = "MIT"
+name = "uwsgi_rust"
 repository = "https://github.com/unbit/uwsgi-rust"
-description = """
-uWSGI and Rust integration plugin. 
-"""
+version = "0.0.1-dev"
+
+[dependencies]
+clippy = "0.0.58"
+libc = "0.1"
+libloading = "*"
 
 [lib]
 crate-type = ["staticlib"]
 name = "uwsgi_rust"
 path = "plugin.rs"
-
-[dependencies]
-libc = "0.1"
-libloading = "*"

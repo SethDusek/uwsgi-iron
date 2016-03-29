@@ -10,8 +10,8 @@ use std::str;
 use std::slice;
 
 // global access to the function entry point (could become a vector to support multple apps)
-type rust_fn = Symbol<extern fn(HashMap<&str, &str>) -> (String, Vec<(String, String)>, Vec<Vec<u8>>)>;
-static mut app : Option<rust_fn> = None;
+type RustFn = Symbol<extern fn(HashMap<&str, &str>) -> (String, Vec<(String, String)>, Vec<u8>)>;
+static mut app : Option<RustFn> = None;
 
 // C functions used by Rust
 extern {
@@ -27,11 +27,6 @@ extern {
 pub extern fn rust_load_fn(name: *mut u8, name_len: u16) -> i32 {
 	let lib = Library::this(); 
 	let fn_name_slice = unsafe { slice::from_raw_parts(name, name_len as usize) };
-	let fn_name = match str::from_utf8(fn_name_slice) {
-		Ok(s) => s,
-		Err(e) => { println!("[rust] {}", e); return -1 },
-	};
-
 	unsafe {
         app = match lib.get(fn_name_slice) {
                 Ok(symbol) => Some(symbol),
@@ -39,7 +34,7 @@ pub extern fn rust_load_fn(name: *mut u8, name_len: u16) -> i32 {
                 }
     };
 
-	return 0;
+	0
 }
 
 // populate the environ HashMap with CGI vars
@@ -61,7 +56,7 @@ pub extern fn rust_add_environ(environ: *mut HashMap<&str, &str>, key: *mut u8, 
 		(*environ).insert(sk, sv);
 	}
 
-	return 0;
+	0
 }
 
 // run the entry point and send its response to the client
@@ -79,7 +74,7 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 		    match app {
 			    None => return -1,
 			    Some(ref f) => f,
-		};
+		}
 	};
 
 	let (status, headers, body) = entry_point(environ);
@@ -101,14 +96,20 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 		}
 	}
 
-	for chunk in body {
+	/*for chunk in body {
 		unsafe {
 			let ret = uwsgi_response_write_body_do(wsgi_req, chunk.as_ptr() as *mut u8, chunk.len() as u64);
 			if ret != 0 {
 				return ret;
 			}
 		}
-	}
+	}*/
+    unsafe {
+        let ret = uwsgi_response_write_body_do(wsgi_req, body.as_ptr() as *mut u8, body.len() as u64);
+        if ret != 0 {
+            return ret;
+        }
+        }
 
-	return 0;
+	0
 }
