@@ -4,6 +4,7 @@
 extern crate libloading;
 extern crate iron;
 extern crate hyper;
+#[macro_use] extern crate lazy_static;
 extern crate libc;
 
 use libloading::os::unix::*;
@@ -22,14 +23,19 @@ use std::str::FromStr;
 use std::io::Cursor;
 use hyper::buffer::BufReader;
 use std::str;
+use std::sync::Mutex;
 use std::time::Duration;
 use std::net::{IpAddr, SocketAddr};
 use std::slice;
 
 // global access to the function entry point (could become a vector to support multple apps)
 type RustFn = Symbol<extern fn(HashMap<&str, &str>) -> (String, Vec<(String, String)>, Vec<u8>)>;
-static mut app: Option<RustFn> = None;
-static mut handler: Option<RustFn> = None;
+type FnHandler = Symbol<extern fn() -> Box<Handler>>;
+static mut app: Option<FnHandler> = None;
+//static mut handler: Option<Mutex<Box<Handler>>> = None;
+lazy_static! {
+    static ref HANDLER: Mutex<HandlerWrap> = Mutex::new(HandlerWrap(None)); 
+}
 
 // C functions used by Rust
 fn handlee(_: &mut Request) -> IronResult<Response> {
@@ -53,7 +59,8 @@ pub extern fn rust_load_fn(name: *mut u8, name_len: u16) -> i32 {
         app = match lib.get(fn_name_slice) {
                 Ok(symbol) => Some(symbol),
                 Err(e) => { println!("[rust] {}", e); return -1 }
-                }
+                };
+        //HANDLER = Some(Mutex::new(app.unwrap()()));
     };
 
 	0
@@ -114,9 +121,7 @@ fn translate_from_response(resp: Response) -> (String, Vec<(String, String)>, Ve
         }
     }
     if let Some(status) = resp.status {
-        if let Some(canonical) = status.canonical_reason() {
-            status_code.push_str(canonical);
-        }
+        status_code.push_str(&format!("{}", status));
     }
     else {
         status_code.push_str("200 OK");
@@ -147,8 +152,25 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 			return -1;
 		}
 	}
+    let handler = unsafe { 
+        match app {
+            None => return -1,
+            Some(ref f) => f
+        }
+    };
+
     let mut request = translate_to_request(&environ, unsafe { &mut *(&mut body as *mut _) }, len as u64);    
-	let entry_point = unsafe {
+    let mut lock = HANDLER.lock().unwrap();
+    if lock.0.is_none() {
+        lock.set_handler(handler());
+    }
+    println!("as");
+    let (status, headers, body): (String, Vec<(String, String)>, Vec<u8>) = if let Some(ref mut handler) = lock.0 {
+        translate_from_response(handler.handle(&mut request).unwrap())
+    }
+    else { return -1; };
+    println!("{:?}", status);
+	/*let entry_point = unsafe {
 		    match app {
 			    None => return -1,
 			    Some(ref f) => f,
@@ -156,7 +178,7 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 	};
 
 	let (status, headers, body) = entry_point(environ);
-
+*/
 	unsafe {
 		let ret = uwsgi_response_prepare_headers(wsgi_req, status.as_ptr() as *mut u8, status.into_bytes().len() as u16);
 		if ret != 0 {
@@ -165,6 +187,7 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 	}
 
 	for header in headers {
+        println!("{:?}", header);
 		unsafe {
 			let ret = uwsgi_response_add_header(wsgi_req, header.0.as_ptr() as *mut u8, header.0.into_bytes().len() as u16,
 				header.1.as_ptr() as *mut u8, header.1.into_bytes().len() as u16);
@@ -217,4 +240,12 @@ impl NetworkStream for Curser {
     fn peer_addr(&mut self) -> Result<SocketAddr, io::Error> { Ok(SocketAddr::from_str("http://localhost:8080").unwrap()) }
     fn set_read_timeout(&self, _: Option<Duration>) -> Result<(), std::io::Error> { Ok(()) }
     fn set_write_timeout(&self, _: Option<Duration>) -> Result<(), std::io::Error> { Ok(()) }
+}
+
+struct HandlerWrap(Option<Box<Handler>>);
+
+impl HandlerWrap {
+    fn set_handler(&mut self, handler: Box<Handler>) {
+        self.0 = Some(handler)
+    }
 }
