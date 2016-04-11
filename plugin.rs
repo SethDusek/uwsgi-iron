@@ -38,9 +38,6 @@ lazy_static! {
 }
 
 // C functions used by Rust
-fn handlee(_: &mut Request) -> IronResult<Response> {
-    Ok(Response::with((status::Ok, "Hello World!")))
-}
 extern {
 	fn uwsgi_response_prepare_headers(wsgi_req: *mut c_void, buf: *mut u8, buf_len: u16) -> i32;
 	fn uwsgi_response_add_header(wsgi_req: *mut c_void, key: *mut u8, key_len: u16, val: *mut u8, val_len: u16) -> i32;
@@ -164,12 +161,10 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
     if lock.0.is_none() {
         lock.set_handler(handler());
     }
-    println!("as");
     let (status, headers, body): (String, Vec<(String, String)>, Vec<u8>) = if let Some(ref mut handler) = lock.0 {
         translate_from_response(handler.handle(&mut request).unwrap())
     }
     else { return -1; };
-    println!("{:?}", status);
 	/*let entry_point = unsafe {
 		    match app {
 			    None => return -1,
@@ -187,7 +182,6 @@ pub extern fn rust_request_handler(wsgi_req: *mut c_void) -> i32 {
 	}
 
 	for header in headers {
-        println!("{:?}", header);
 		unsafe {
 			let ret = uwsgi_response_add_header(wsgi_req, header.0.as_ptr() as *mut u8, header.0.into_bytes().len() as u16,
 				header.1.as_ptr() as *mut u8, header.1.into_bytes().len() as u16);
