@@ -11,13 +11,12 @@ hyper = "0.8.0"
 lazy_static = "0.1.15"
 libc = "0.1"
 libloading = "*"
+iron = "*"
 
 [dependencies.clippy]
 optional = true
 version = "*"
 
-[dependencies.iron]
-path = "../iron"
 
 [lib]
 crate-type = ["staticlib"]
