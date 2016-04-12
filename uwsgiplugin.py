@@ -4,6 +4,7 @@ import os.path
 base_path = os.path.dirname(os.path.realpath("__file__"))
 NAME = 'rust'
 GCC_LIST = ['rust', '%s/target/release/libuwsgi_rust.a' % base_path]
+LIBS = ["-lssl"]
 
 CFLAGS = []
 
