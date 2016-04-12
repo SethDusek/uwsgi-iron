@@ -85,7 +85,7 @@ pub extern fn rust_add_environ(environ: *mut HashMap<&str, &str>, key: *mut u8, 
 	0
 }
 
-fn translate_to_request<'a>(environ: &HashMap<&str, &str>, body: &'a mut BufReader<&mut NetworkStream>, len: u64) -> Request<'a> {
+fn translate_to_request<'a, 'b>(environ: &HashMap<&str, &str>, body: &'a mut BufReader<&'b mut NetworkStream>, len: u64) -> Request<'a, 'b> {
     let url = Url::parse(&("http://".to_owned() + environ.get("HTTP_HOST").unwrap() + environ.get("REQUEST_URI").unwrap())).unwrap();
     let mut headers = Headers::new();
     for (field, value) in environ.iter() {
